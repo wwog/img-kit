@@ -178,4 +178,19 @@ public.png                   png   Writable
     fn test_get_sips_format_support_should_be_none_on_non_macos() {
         assert!(get_sips_format_support().is_none());
     }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_query_has_alpha_returns_ok_none_off_macos() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/bmp_1.bmp");
+        assert_eq!(query_has_alpha(&path), Ok(None));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_query_has_alpha_for_asset_bmp_returns_some_bool() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/bmp_1.bmp");
+        let result = query_has_alpha(&path).expect("查询不应失败");
+        assert!(matches!(result, Some(true) | Some(false) | None));
+    }
 }

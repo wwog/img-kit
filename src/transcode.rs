@@ -134,4 +134,71 @@ mod tests {
         let result = transcode_image(&input_path, &output_dir);
         assert!(result.is_err(), "png 输入应返回无需转码错误");
     }
+
+    #[test]
+    fn test_transcode_jpeg_should_fail() {
+        let input_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join("jpg_1.jpg")
+            .to_string_lossy()
+            .into_owned();
+        let output_dir = unique_output_dir();
+
+        let result = transcode_image(&input_path, &output_dir);
+        assert!(result.is_err(), "jpeg 输入应返回无需转码错误");
+        let message = result.unwrap_err();
+        assert!(
+            message.contains("无需转码"),
+            "错误信息应提示无需转码: {message}"
+        );
+    }
+
+    #[test]
+    fn test_transcode_unsupported_magic_should_fail() {
+        let dir = std::env::temp_dir().join(format!(
+            "img-kit-transcode-unsupported-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let input_path = dir.join("unknown.bin");
+        std::fs::write(&input_path, b"no-valid-magic-here").expect("write input");
+
+        let output_dir = unique_output_dir();
+        let result = transcode_image(
+            &input_path.to_string_lossy(),
+            &output_dir,
+        );
+        assert!(result.is_err(), "无法识别的格式应报错");
+        assert!(
+            result.unwrap_err().contains("不支持"),
+            "应提示格式不支持"
+        );
+    }
+
+    #[test]
+    fn test_transcode_generated_bmp_roundtrip_metadata() {
+        let dir = std::env::temp_dir().join(format!(
+            "img-kit-transcode-gen-bmp-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let input_path = dir.join("one.bmp");
+        let rgb: image::RgbImage = image::ImageBuffer::from_pixel(2, 2, image::Rgb([10_u8, 20, 30]));
+        rgb.save_with_format(&input_path, ImageFormat::Bmp)
+            .expect("write bmp");
+
+        let output_dir = unique_output_dir();
+        let output_path = transcode_image(
+            &input_path.to_string_lossy(),
+            &output_dir,
+        )
+        .expect("程序生成的 bmp 应可转码");
+
+        assert!(Path::new(&output_path).exists());
+        let fmt = get_image_encoding_format(&output_path);
+        assert!(
+            matches!(fmt, ImageEncodingFormat::Jpeg | ImageEncodingFormat::Png),
+            "输出应为 jpg 或 png，实际: {fmt:?}"
+        );
+    }
 }

@@ -122,4 +122,92 @@ mod tests {
 
         assert!(checked_count > 0, "assets 目录中未找到可识别格式的测试图片");
     }
+
+    #[test]
+    fn get_image_encoding_format_missing_file_is_unsupported() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("img-kit-no-such-image-9f3a2c1d.bin");
+        assert_eq!(
+            get_image_encoding_format(&path.to_string_lossy()),
+            ImageEncodingFormat::Unsupported
+        );
+    }
+
+    #[test]
+    fn get_image_encoding_format_detects_magic_bytes_in_temp_files() {
+        let dir = std::env::temp_dir().join(format!(
+            "img-kit-meta-magic-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+
+        let png_path = dir.join("x.bin");
+        std::fs::write(
+            &png_path,
+            [0x89_u8, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A],
+        )
+        .expect("write png header");
+        assert_eq!(
+            get_image_encoding_format(&png_path.to_string_lossy()),
+            ImageEncodingFormat::Png
+        );
+
+        let jpeg_path = dir.join("x.dat");
+        std::fs::write(&jpeg_path, [0xFF_u8, 0xD8, 0xFF, 0xE0]).expect("write jpeg header");
+        assert_eq!(
+            get_image_encoding_format(&jpeg_path.to_string_lossy()),
+            ImageEncodingFormat::Jpeg
+        );
+
+        let bmp_path = dir.join("n.bmp");
+        std::fs::write(&bmp_path, *b"BM....").expect("write bmp header");
+        assert_eq!(
+            get_image_encoding_format(&bmp_path.to_string_lossy()),
+            ImageEncodingFormat::Bmp
+        );
+
+        let mut webp = [0_u8; 12];
+        webp[0..4].copy_from_slice(b"RIFF");
+        webp[8..12].copy_from_slice(b"WEBP");
+        let webp_path = dir.join("a.webp");
+        std::fs::write(&webp_path, webp).expect("write webp header");
+        assert_eq!(
+            get_image_encoding_format(&webp_path.to_string_lossy()),
+            ImageEncodingFormat::Webp
+        );
+
+        let mut tiff = [0_u8; 8];
+        tiff[0..4].copy_from_slice(&[b'I', b'I', 0x2A, 0x00]);
+        let tiff_path = dir.join("sample.tiff");
+        std::fs::write(&tiff_path, tiff).expect("write tiff header");
+        assert_eq!(
+            get_image_encoding_format(&tiff_path.to_string_lossy()),
+            ImageEncodingFormat::Tiff
+        );
+
+        let dng_path = dir.join("raw.dng");
+        std::fs::write(&dng_path, tiff).expect("write dng-as-tiff header");
+        assert_eq!(
+            get_image_encoding_format(&dng_path.to_string_lossy()),
+            ImageEncodingFormat::Dng
+        );
+
+        let mut heic = [0_u8; 12];
+        heic[4..8].copy_from_slice(b"ftyp");
+        heic[8..12].copy_from_slice(b"heic");
+        let heic_path = dir.join("c.heic");
+        std::fs::write(&heic_path, heic).expect("write heic header");
+        assert_eq!(
+            get_image_encoding_format(&heic_path.to_string_lossy()),
+            ImageEncodingFormat::Heic
+        );
+
+        let garbage_path = dir.join("garbage.bin");
+        std::fs::write(&garbage_path, b"not-an-image").expect("write garbage");
+        assert_eq!(
+            get_image_encoding_format(&garbage_path.to_string_lossy()),
+            ImageEncodingFormat::Unsupported
+        );
+    }
 }
