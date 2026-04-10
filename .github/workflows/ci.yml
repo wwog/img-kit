@@ -1,8 +1,8 @@
 name: CI
 
 on:
+  # 分支 push 不触发；仅推送 v* 标签时跑测试与 release构建
   push:
-    branches: [main, master]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
