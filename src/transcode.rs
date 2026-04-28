@@ -1,4 +1,5 @@
-/// 将除了jpg png webp 以外的支持的格式，根据是否包含透明通道来转换到png,或者jpg
+/// 将图片归一化为可发送格式（jpg/png/webp）。
+/// 输入已是目标格式时直接返回原路径；其他支持格式根据是否含透明通道转为 png 或 jpg。
 use crate::metadata::{ImageEncodingFormat, get_image_encoding_format};
 use crate::sips;
 use image::{ColorType, DynamicImage, ImageFormat};
@@ -35,7 +36,18 @@ pub fn transcode_image(input_path: &str, output_dir: &str) -> Result<String, Str
     let input_format = get_image_encoding_format(input_path);
     match input_format {
         ImageEncodingFormat::Jpeg | ImageEncodingFormat::Png | ImageEncodingFormat::Webp => {
-            return Err("输入文件已是目标格式（jpg/png/webp），无需转码".to_owned());
+            // Already a sendable format: copy into output_dir so the returned path
+            // is always under output_dir, keeping the contract consistent for callers.
+            std::fs::create_dir_all(output_dir)
+                .map_err(|e| format!("创建输出目录失败: {e}"))?;
+            let input_path_obj = Path::new(input_path);
+            let file_name = input_path_obj
+                .file_name()
+                .ok_or_else(|| "输入路径无文件名".to_owned())?;
+            let output_path = Path::new(output_dir).join(file_name);
+            std::fs::copy(input_path, &output_path)
+                .map_err(|e| format!("复制文件失败: {e}"))?;
+            return Ok(output_path.to_string_lossy().into_owned());
         }
         ImageEncodingFormat::Unsupported => {
             return Err("输入文件格式不支持转码".to_owned());
@@ -123,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transcode_png_should_fail() {
+    fn test_transcode_png_returns_output_dir_path() {
         let input_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("assets")
             .join("png_1.png")
@@ -132,11 +144,17 @@ mod tests {
         let output_dir = unique_output_dir();
 
         let result = transcode_image(&input_path, &output_dir);
-        assert!(result.is_err(), "png 输入应返回无需转码错误");
+        assert!(result.is_ok(), "png 输入应直接复制并返回路径: {:?}", result.err());
+        let returned = result.unwrap();
+        assert!(
+            returned.starts_with(&output_dir),
+            "返回路径应在 output_dir 内，实际: {returned}"
+        );
+        assert!(Path::new(&returned).exists(), "输出文件应存在");
     }
 
     #[test]
-    fn test_transcode_jpeg_should_fail() {
+    fn test_transcode_jpeg_returns_output_dir_path() {
         let input_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("assets")
             .join("jpg_1.jpg")
@@ -145,12 +163,13 @@ mod tests {
         let output_dir = unique_output_dir();
 
         let result = transcode_image(&input_path, &output_dir);
-        assert!(result.is_err(), "jpeg 输入应返回无需转码错误");
-        let message = result.unwrap_err();
+        assert!(result.is_ok(), "jpeg 输入应直接复制并返回路径: {:?}", result.err());
+        let returned = result.unwrap();
         assert!(
-            message.contains("无需转码"),
-            "错误信息应提示无需转码: {message}"
+            returned.starts_with(&output_dir),
+            "返回路径应在 output_dir 内，实际: {returned}"
         );
+        assert!(Path::new(&returned).exists(), "输出文件应存在");
     }
 
     #[test]

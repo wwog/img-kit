@@ -43,3 +43,73 @@ fn unknown_subcommand_fails() {
         .expect("应能启动 img-kit");
     assert!(!output.status.success());
 }
+
+#[test]
+fn transcode_jpg_returns_output_dir_path_on_stdout() {
+    let input_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("jpg_1.jpg");
+    let output_dir = std::env::temp_dir().join(format!("img-kit-cli-smoke-{}", std::process::id()));
+
+    let output = Command::new(img_kit_executable())
+        .args(["transcode", &input_path.to_string_lossy(), &output_dir.to_string_lossy()])
+        .output()
+        .expect("应能启动 img-kit");
+
+    assert!(output.status.success(), "jpg 输入应成功退出");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let result_path = Path::new(stdout.trim());
+    assert!(result_path.exists(), "stdout 中的路径应指向实际文件");
+    assert!(
+        result_path.starts_with(&output_dir),
+        "返回路径应在 output_dir 内，实际: {}",
+        result_path.display()
+    );
+}
+
+#[test]
+fn transcode_png_returns_output_dir_path_on_stdout() {
+    let input_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("png_1.png");
+    let output_dir = std::env::temp_dir().join(format!("img-kit-cli-smoke-png-{}", std::process::id()));
+
+    let output = Command::new(img_kit_executable())
+        .args(["transcode", &input_path.to_string_lossy(), &output_dir.to_string_lossy()])
+        .output()
+        .expect("应能启动 img-kit");
+
+    assert!(output.status.success(), "png 输入应成功退出");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let result_path = Path::new(stdout.trim());
+    assert!(result_path.exists(), "stdout 中的路径应指向实际文件");
+    assert!(
+        result_path.starts_with(&output_dir),
+        "返回路径应在 output_dir 内，实际: {}",
+        result_path.display()
+    );
+}
+
+#[test]
+fn transcode_bmp_outputs_converted_file_path_on_stdout() {
+    let input_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("bmp_1.bmp");
+    let output_dir = std::env::temp_dir().join(format!("img-kit-cli-smoke-bmp-{}", std::process::id()));
+
+    let output = Command::new(img_kit_executable())
+        .args(["transcode", &input_path.to_string_lossy(), &output_dir.to_string_lossy()])
+        .output()
+        .expect("应能启动 img-kit");
+
+    assert!(output.status.success(), "bmp 输入应转码成功");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let result_path = Path::new(stdout.trim());
+    assert!(result_path.exists(), "stdout 中的路径应指向实际文件");
+    let ext = result_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    assert!(
+        ext == "jpg" || ext == "png",
+        "转码输出应为 jpg 或 png，实际: {ext}"
+    );
+}
+
